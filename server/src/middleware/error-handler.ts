@@ -1,0 +1,3 @@
+import type { ErrorRequestHandler, RequestHandler } from 'express'
+export const notFound:RequestHandler=(request,response)=>{response.status(404).json({success:false,error:{code:'NOT_FOUND',message:`Route ${request.method} ${request.path} was not found`}})}
+export const errorHandler:ErrorRequestHandler=(error,_request,response,_next)=>{const message=error instanceof Error?error.message:'Unexpected server error';response.status(500).json({success:false,error:{code:'INTERNAL_ERROR',message}})}
