@@ -1,0 +1,10 @@
+import { router } from 'expo-router'
+import { useState } from 'react'
+import { StyleSheet, Text, TextInput, View } from 'react-native'
+import { PrimaryButton, Screen } from '@/components/ui'
+import { colors } from '@/constants/design'
+import { mobileApi } from '@/lib/api'
+import { useAuth } from '@/providers/auth'
+
+export default function ChangePassword(){const{logout}=useAuth();const[current,setCurrent]=useState('');const[next,setNext]=useState('');const[error,setError]=useState('');const[busy,setBusy]=useState(false);async function save(){setBusy(true);setError('');try{await mobileApi.changePassword(current,next);await logout();router.replace('/login')}catch(reason){setError(reason instanceof Error?reason.message:'Could not change password')}finally{setBusy(false)}}return <Screen title="Change password" bottomNav={false}><View style={s.notice}><Text style={s.title}>Create your private password</Text><Text style={s.copy}>For security, the temporary password must be changed before using the app.</Text></View>{error?<Text style={s.error}>{error}</Text>:null}<Text style={s.label}>Temporary password</Text><TextInput secureTextEntry value={current} onChangeText={setCurrent} style={s.input}/><Text style={s.label}>New password</Text><TextInput secureTextEntry value={next} onChangeText={setNext} style={s.input}/><Text style={s.hint}>At least 10 characters with upper-case, lower-case, and a number.</Text><PrimaryButton onPress={save}>{busy?'Saving...':'Change password'}</PrimaryButton></Screen>}
+const s=StyleSheet.create({notice:{padding:15,borderRadius:12,backgroundColor:colors.greenSoft,marginBottom:16},title:{fontSize:15,fontWeight:'800',color:colors.text},copy:{fontSize:11,lineHeight:17,color:colors.muted,marginTop:5},label:{fontSize:11,fontWeight:'700',color:colors.text,marginBottom:6},input:{height:48,borderWidth:1,borderColor:colors.line,borderRadius:10,paddingHorizontal:12,marginBottom:14},hint:{fontSize:10,color:colors.muted,marginTop:-7,marginBottom:16},error:{padding:10,borderRadius:8,backgroundColor:'#FBE3E5',color:colors.danger,fontSize:11,marginBottom:12}})

@@ -1,44 +1,176 @@
 # DukaanFlow
 
-Multi-tenant shop management application with a React admin portal, Expo mobile app, and Express API.
+DukaanFlow is a multi-tenant SaaS foundation for small shops. Platform administrators use the React portal in `admin/`; shop owners use the Expo application in `mobile/`; both share the Express API in `server/`.
 
-## Applications
+Phases 1–3 implement the project foundation, phone/password authentication, shop administration, subscriptions, and subscription-aware access. Debt, inventory, and sales services are intentionally deferred to later phases.
 
-- `admin/` — React + TypeScript platform administration portal
-- `mobile/` — Expo + React Native shop-owner application
-- `server/` — Express + TypeScript API foundation
+## Architecture
 
-## Run the admin portal
+- React + TypeScript admin portal
+- Expo SDK 58 + React Native owner app
+- Node.js + Express + strict TypeScript modular monolith
+- PostgreSQL with a Prisma schema and SQL migrations
+- Shared-schema multi-tenancy: every shop-owned record is scoped by the authenticated membership
+- Short-lived JWT access tokens and rotating opaque refresh tokens
+- Argon2id password hashing; existing bcrypt hashes remain verifiable for migration compatibility
+- Zod validation, Pino request logging, Helmet, CORS, and centralized errors
 
-```bash
-cd admin
-npm run dev
+```text
+Commercial-App/
+├── admin/                  React admin portal
+├── mobile/                 Expo owner application
+├── server/
+│   ├── prisma/             schema, migrations, and seed
+│   └── src/
+│       ├── config/         environment and PostgreSQL pool
+│       ├── middleware/     auth, authorization, validation, errors
+│       ├── modules/        auth, shops, subscriptions
+│       └── shared/         reusable domain utilities
+├── docker-compose.yml      optional local PostgreSQL
+└── package.json            workspace commands
 ```
 
-## Run the mobile app
+## Initial setup
+
+Install dependencies from the repository root:
 
 ```bash
-cd mobile
-npm start
+npm install
 ```
 
-Use `npm run android`, `npm run ios`, or `npm run web` for a specific platform.
+Copy `server/.env.example` to `server/.env`. For Neon, use the pooled URL as `DATABASE_URL` and the non-pooler URL as `DIRECT_URL`. Both URLs should include TLS, normally `sslmode=require`. Never commit `.env`.
 
-## Run the API
+Required production settings:
 
-Copy `server/.env.example` to `server/.env`, then:
+- `DATABASE_URL`
+- `DIRECT_URL` for migrations
+- `ACCESS_TOKEN_SECRET` with at least 32 random characters
+- `CORS_ORIGIN`, as a comma-separated allowlist
+- `COOKIE_SECURE=true` when served over HTTPS
+
+The mobile app reads `EXPO_PUBLIC_API_URL`. Example:
+
+```powershell
+$env:EXPO_PUBLIC_API_URL="http://192.168.1.10:4000/api/v1"
+npm run dev:mobile
+```
+
+Use the development machine's LAN address rather than `localhost` when testing on a physical phone.
+
+## Database
+
+For local PostgreSQL:
 
 ```bash
-cd server
-npm run dev
+npm run db:up
 ```
 
-The health endpoint is available at `GET /api/v1/health`.
+For local development, set both database URLs to:
+
+```text
+postgresql://dukaanflow:dukaanflow_dev@localhost:5432/dukaanflow
+```
+
+Apply migrations and seed the four plans:
+
+```bash
+npm run db:generate
+npm run db:migrate
+npm run db:seed
+```
+
+Seeded plans are Weekly Trial (7 days), Monthly Trial (one calendar month), Monthly, and Yearly. Paid prices are deliberately `0` placeholders until an administrator configures real prices.
+
+### First administrator
+
+Before seeding, set these only in `server/.env`:
+
+```text
+BOOTSTRAP_ADMIN_NAME=Platform Admin
+BOOTSTRAP_ADMIN_PHONE=+252610000000
+BOOTSTRAP_ADMIN_PASSWORD=A-strong-temporary-password1
+```
+
+`npm run db:seed` is safe to repeat and will not duplicate the administrator. The initial administrator must change the temporary password on first login. Remove the bootstrap password from the environment afterward.
+
+## Development
+
+Run each application in a separate terminal:
+
+```bash
+npm run dev:server
+npm run dev:admin
+npm run dev:mobile
+```
+
+The API health check is `GET http://localhost:4000/api/v1/health`; it reports success only after PostgreSQL responds.
+
+## Authentication and tenant isolation
+
+- Login identities use globally unique normalized international phone numbers.
+- No email, SMS, OTP, Twilio, or external identity provider is used.
+- The API derives an owner's shop from the active membership in the access token context; owner requests never select an arbitrary `shopId`.
+- Refresh tokens are stored only as SHA-256 hashes, rotate on every refresh, and are revoked as a family when reuse is detected.
+- Admin browser refresh tokens use HttpOnly, SameSite cookies. Mobile refresh tokens use Expo SecureStore.
+- Suspended and inactive shops are blocked regardless of subscription.
+- An expired subscription gives read-only access. Pending or cancelled subscriptions restrict business writes.
+
+## Subscription lifecycle
+
+Administrators can activate, renew, extend, and cancel manually. Mutations lock the shop row, write the subscription and event in one transaction, and accept idempotency keys. The effective status is computed at request time using the exclusive boundary `startsAt <= now < expiresAt`.
+
+Calendar policy: days add UTC calendar days; months and years preserve the day when possible and clamp to the destination month's last day. Early renewal starts from the existing expiration so remaining paid time is preserved. Expired renewal starts now.
+
+Each shop receives one introductory trial by default. A repeated trial requires an explicit override and reason, which is stored in event history.
+
+## Main API endpoints
+
+Authentication:
+
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/refresh`
+- `POST /api/v1/auth/logout`
+- `GET /api/v1/auth/me`
+- `POST /api/v1/auth/change-password`
+
+Admin shops and owners:
+
+- `GET /api/v1/admin/dashboard`
+- `GET|POST /api/v1/admin/shops`
+- `GET|PATCH /api/v1/admin/shops/:id`
+- `POST /api/v1/admin/shops/:id/status`
+- `GET /api/v1/admin/owners`
+- `POST /api/v1/admin/owners/:id/status`
+- `POST /api/v1/admin/owners/:id/reset-password`
+
+Subscriptions:
+
+- `GET|POST /api/v1/admin/subscription-plans`
+- `PATCH /api/v1/admin/subscription-plans/:id`
+- `GET /api/v1/admin/subscriptions`
+- `GET /api/v1/admin/subscriptions/expiring`
+- `GET /api/v1/admin/shops/:shopId/subscription`
+- `POST /api/v1/admin/shops/:shopId/subscription/{activate|renew|extend|cancel}`
+- `GET /api/v1/admin/shops/:shopId/subscription/history`
+- `GET /api/v1/shop/subscription`
 
 ## Verification
 
 ```bash
-cd admin && npm run build && npm run lint
-cd mobile && npx tsc --noEmit
-cd server && npm run build
+npm run verify
 ```
+
+Or run checks independently:
+
+```bash
+npm run build
+npm run typecheck
+npm run lint
+npm run test:server
+```
+
+Critical database and concurrency behavior should also be tested against a dedicated PostgreSQL test database in CI. Unit tests cover phone normalization and UTC calendar/status behavior.
+
+## Deferred work
+
+Customer debt, payments, products, inventory balances, stock movements, sales, returns, receipts, payment gateways, suppliers, and expenses are not implemented in Phases 1–3. Their existing visual prototypes must not be treated as real backend data.

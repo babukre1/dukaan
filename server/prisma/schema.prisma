@@ -1,0 +1,200 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum PlatformRole {
+  ADMIN
+  OWNER
+}
+
+enum ShopAccountStatus {
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+enum MembershipRole {
+  OWNER
+}
+
+enum SubscriptionType {
+  TRIAL
+  PAID
+}
+
+enum DurationUnit {
+  DAY
+  MONTH
+  YEAR
+}
+
+enum SubscriptionRecordStatus {
+  PENDING
+  ACTIVE
+  CANCELLED
+}
+
+enum SubscriptionEventType {
+  ACTIVATED
+  TRIAL_STARTED
+  RENEWED
+  EXTENDED
+  CANCELLED
+  CORRECTED
+}
+
+model User {
+  id                 String              @id @default(uuid()) @db.Uuid
+  fullName           String              @db.VarChar(120)
+  phoneNumber        String              @unique @db.VarChar(20)
+  passwordHash       String              @db.Text
+  platformRole       PlatformRole
+  isActive           Boolean             @default(true)
+  mustChangePassword Boolean             @default(false)
+  tokenVersion       Int                 @default(0)
+  lastLoginAt        DateTime?           @db.Timestamptz(3)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
+  memberships        ShopMembership[]
+  refreshSessions    RefreshSession[]
+  subscriptionEvents SubscriptionEvent[] @relation("SubscriptionActor")
+  auditLogs          AdminAuditLog[]     @relation("AuditActor")
+
+  @@index([platformRole, isActive])
+  @@map("users")
+}
+
+model Shop {
+  id                 String              @id @default(uuid()) @db.Uuid
+  name               String              @db.VarChar(160)
+  phoneNumber        String              @unique @db.VarChar(20)
+  currencyCode       String              @default("USD") @db.Char(3)
+  accountStatus      ShopAccountStatus   @default(ACTIVE)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
+  memberships        ShopMembership[]
+  subscription       ShopSubscription?
+  subscriptionEvents SubscriptionEvent[]
+  auditLogs          AdminAuditLog[]
+
+  @@index([accountStatus, createdAt])
+  @@index([name])
+  @@map("shops")
+}
+
+model ShopMembership {
+  id        String         @id @default(uuid()) @db.Uuid
+  shopId    String         @db.Uuid
+  userId    String         @db.Uuid
+  role      MembershipRole @default(OWNER)
+  isActive  Boolean        @default(true)
+  createdAt DateTime       @default(now()) @db.Timestamptz(3)
+  shop      Shop           @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([shopId, userId])
+  @@index([userId, isActive])
+  @@index([shopId, isActive])
+  @@map("shop_memberships")
+}
+
+model SubscriptionPlan {
+  id            String             @id @default(uuid()) @db.Uuid
+  code          String             @unique @db.VarChar(40)
+  name          String             @db.VarChar(100)
+  type          SubscriptionType
+  durationUnit  DurationUnit
+  durationCount Int
+  price         Decimal            @default(0) @db.Decimal(18, 2)
+  currencyCode  String             @default("USD") @db.Char(3)
+  isActive      Boolean            @default(true)
+  createdAt     DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime           @updatedAt @db.Timestamptz(3)
+  subscriptions ShopSubscription[]
+
+  @@index([isActive, type])
+  @@map("subscription_plans")
+}
+
+model ShopSubscription {
+  id               String                   @id @default(uuid()) @db.Uuid
+  shopId           String                   @unique @db.Uuid
+  planId           String                   @db.Uuid
+  startsAt         DateTime                 @db.Timestamptz(3)
+  expiresAt        DateTime                 @db.Timestamptz(3)
+  status           SubscriptionRecordStatus @default(ACTIVE)
+  snapshotPlanCode String                   @db.VarChar(40)
+  snapshotPrice    Decimal                  @db.Decimal(18, 2)
+  currencyCode     String                   @db.Char(3)
+  createdAt        DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime                 @updatedAt @db.Timestamptz(3)
+  shop             Shop                     @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  plan             SubscriptionPlan         @relation(fields: [planId], references: [id], onDelete: Restrict)
+  events           SubscriptionEvent[]
+
+  @@index([status, expiresAt])
+  @@index([planId, status])
+  @@map("shop_subscriptions")
+}
+
+model SubscriptionEvent {
+  id                String                @id @default(uuid()) @db.Uuid
+  shopId            String                @db.Uuid
+  subscriptionId    String                @db.Uuid
+  eventType          SubscriptionEventType
+  previousExpiresAt DateTime?             @db.Timestamptz(3)
+  newExpiresAt      DateTime?             @db.Timestamptz(3)
+  performedByUserId String                @db.Uuid
+  idempotencyKey    String?               @db.VarChar(120)
+  note              String?               @db.VarChar(500)
+  metadata          Json?
+  createdAt         DateTime              @default(now()) @db.Timestamptz(3)
+  shop              Shop                  @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  subscription      ShopSubscription      @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  performedBy       User                  @relation("SubscriptionActor", fields: [performedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([shopId, idempotencyKey])
+  @@index([shopId, createdAt(sort: Desc)])
+  @@index([subscriptionId, createdAt(sort: Desc)])
+  @@map("subscription_events")
+}
+
+model RefreshSession {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  familyId   String    @db.Uuid
+  tokenHash  String    @unique @db.Char(64)
+  expiresAt  DateTime  @db.Timestamptz(3)
+  revokedAt  DateTime? @db.Timestamptz(3)
+  replacedBy String?   @db.Uuid
+  userAgent  String?   @db.VarChar(300)
+  ipAddress  String?   @db.VarChar(64)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([familyId, revokedAt])
+  @@map("refresh_sessions")
+}
+
+model AdminAuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String   @db.Uuid
+  shopId      String?  @db.Uuid
+  action      String   @db.VarChar(80)
+  entityType  String   @db.VarChar(80)
+  entityId    String   @db.VarChar(80)
+  metadata    Json?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  actor       User     @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+  shop        Shop?    @relation(fields: [shopId], references: [id], onDelete: Restrict)
+
+  @@index([shopId, createdAt(sort: Desc)])
+  @@index([actorUserId, createdAt(sort: Desc)])
+  @@index([entityType, entityId])
+  @@map("admin_audit_logs")
+}
