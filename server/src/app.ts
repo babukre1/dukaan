@@ -1,6 +1,7 @@
 import cors from 'cors'
 import express from 'express'
-import helmet from 'helmet'
+import type { RequestHandler } from 'express'
+import helmetModule from 'helmet'
 import { pinoHttp } from 'pino-http'
 import { corsOrigins } from './config/env.js'
 import { errorHandler, notFound } from './middleware/error-handler.js'
@@ -11,9 +12,13 @@ import { accessTestRouter } from './routes/access-test.route.js'
 import { healthRouter } from './routes/health.route.js'
 
 export const app = express()
+// Helmet's runtime default export is callable, but its CommonJS declaration can
+// be interpreted as a module namespace by TypeScript on Vercel's Linux builder.
+const createHelmet = helmetModule as unknown as () => RequestHandler
+
 app.disable('x-powered-by')
 app.set('trust proxy', 1)
-app.use(helmet())
+app.use(createHelmet())
 app.use(cors({ origin: (origin, callback) => !origin || corsOrigins.includes(origin) ? callback(null, true) : callback(new Error('Origin is not allowed')), credentials: true }))
 app.use(pinoHttp())
 app.use(express.json({limit:'1mb'}))
