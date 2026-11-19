@@ -12,6 +12,7 @@ import { healthRouter } from './routes/health.route.js'
 
 export const app = express()
 app.disable('x-powered-by')
+app.set('trust proxy', 1)
 app.use(helmet())
 app.use(cors({ origin: (origin, callback) => !origin || corsOrigins.includes(origin) ? callback(null, true) : callback(new Error('Origin is not allowed')), credentials: true }))
 app.use(pinoHttp())
@@ -23,3 +24,7 @@ app.use('/api/v1', subscriptionRouter)
 app.use('/api/v1/shop/access-test', accessTestRouter)
 app.use(notFound)
 app.use(errorHandler)
+
+// Vercel detects and deploys this Express application as one serverless function.
+// Local development continues to use src/local-server.ts, which owns app.listen().
+export default app

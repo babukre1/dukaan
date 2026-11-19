@@ -4,7 +4,9 @@ import { env } from './env.js'
 const { Pool } = pg
 export const db = new Pool({
   connectionString: env.DATABASE_URL,
-  max: env.NODE_ENV === 'test' ? 4 : 12,
+  // Keep each serverless instance's pool small. Production uses the pooled
+  // DATABASE_URL, while local development can use a larger direct pool.
+  max: env.NODE_ENV === 'production' ? 5 : env.NODE_ENV === 'test' ? 4 : 12,
   connectionTimeoutMillis: 10_000,
   idleTimeoutMillis: 30_000,
   allowExitOnIdle: env.NODE_ENV === 'test',

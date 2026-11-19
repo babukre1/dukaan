@@ -1,4 +1,6 @@
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? (__DEV__
+  ? 'http://localhost:4000/api/v1'
+  : 'https://dukaanapi.abubakr.so/api/v1')
 let accessToken = ''
 
 type Envelope<T> = { success: true; data: T } | { success: false; error: { code: string; message: string } }

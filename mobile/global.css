@@ -1,0 +1,17 @@
+@import 'tailwindcss';
+@import 'uniwind';
+
+@theme {
+  --color-brand: #08752D;
+  --color-brand-dark: #075C26;
+  --color-brand-soft: #E8F6E1;
+  --color-brand-lime: #DFF3D2;
+  --color-canvas: #F5F7F5;
+  --color-surface: #FFFFFF;
+  --color-ink: #172119;
+  --color-muted: #6E786F;
+  --color-line: #E6EAE6;
+  --color-danger: #D22E40;
+  --color-amber: #AF7200;
+  --color-amber-soft: #FFF3D2;
+}

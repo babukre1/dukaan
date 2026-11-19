@@ -105,6 +105,48 @@ npm run dev:mobile
 
 The API health check is `GET http://localhost:4000/api/v1/health`; it reports success only after PostgreSQL responds.
 
+## Local and production environments
+
+Local development uses these defaults:
+
+- Admin: `http://localhost:5173`
+- API: `http://localhost:4000/api/v1`
+- Expo web: `http://localhost:8081`
+- Cookies are not marked `Secure`
+
+Production uses:
+
+- Admin: `https://dukaanadmin.abubakr.so`
+- API: `https://dukaanapi.abubakr.so/api/v1`
+- Cookies are marked `Secure`
+- CORS allows `https://dukaanadmin.abubakr.so`
+
+Create two Vercel projects from the same repository:
+
+1. Backend project: set **Root Directory** to `server`, use the **Express** framework preset, and attach `dukaanapi.abubakr.so`.
+2. Admin project: set **Root Directory** to `admin`, use the **Vite** framework preset, and attach `dukaanadmin.abubakr.so`.
+
+Set these variables on the backend Vercel project for the Production environment:
+
+```text
+NODE_ENV=production
+DATABASE_URL=<pooled production PostgreSQL URL>
+DIRECT_URL=<direct production PostgreSQL URL>
+ACCESS_TOKEN_SECRET=<at least 32 cryptographically random characters>
+CORS_ORIGIN=https://dukaanadmin.abubakr.so
+COOKIE_SECURE=true
+```
+
+The backend's `vercel.json` explicitly installs development dependencies during the build, so TypeScript and `@types/node` remain available even when `NODE_ENV=production`. Do not configure an Output Directory for the Express project.
+
+The admin production API URL defaults to `https://dukaanapi.abubakr.so/api/v1`. You can override it by setting this variable on the admin Vercel project:
+
+```text
+VITE_API_URL=https://dukaanapi.abubakr.so/api/v1
+```
+
+Apply production database migrations separately before first use; do not run development migrations from a Vercel request.
+
 ## Authentication and tenant isolation
 
 - Login identities use globally unique normalized international phone numbers.

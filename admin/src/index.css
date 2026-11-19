@@ -1,1 +1,26 @@
-:root{font-family:Inter,"Segoe UI",system-ui,sans-serif;color:#172119;background:#f5f7f5;font-synthesis:none;text-rendering:optimizeLegibility}*{box-sizing:border-box}body{margin:0;min-width:320px}button,input,select,textarea{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid rgba(11,116,48,.18);outline-offset:2px}#root{min-height:100vh}
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #08752d;
+  --color-brand-dark: #075c26;
+  --color-brand-soft: #e7f5df;
+}
+
+@layer base {
+  :root {
+    font-family: Inter, "Segoe UI", system-ui, sans-serif;
+    color: #172119;
+    background: #f5f7f5;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  * { @apply box-border; }
+  body { @apply m-0 min-w-80; }
+  button, input, select, textarea { font: inherit; }
+  button { @apply cursor-pointer; }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    @apply outline outline-[3px] outline-offset-2 outline-brand/20;
+  }
+  #root { @apply min-h-screen; }
+}
