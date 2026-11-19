@@ -18,8 +18,8 @@ async function loadArgon(): Promise<ArgonModule | null> {
 }
 
 export function assertStrongPassword(password: string): void {
-  if (password.length < 10 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password)) {
-    throw new AppError(400, 'VALIDATION_ERROR', 'Password must be at least 10 characters and include upper-case, lower-case, and a number')
+  if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Password must be at least 8 characters and include a letter and a number')
   }
 }
 
