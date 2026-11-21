@@ -1136,7 +1136,7 @@ function AdminPassword({ done }: { done: () => void }) {
             type="password"
             value={next}
             onChange={(event) => setNext(event.target.value)}
-            minLength={10}
+            minLength={8}
             required
           />
         </label>
@@ -1278,7 +1278,7 @@ function AddShopModal({
           <input
             name="temporaryPassword"
             type="password"
-            minLength={10}
+            minLength={8}
             required
           />
         </label>
