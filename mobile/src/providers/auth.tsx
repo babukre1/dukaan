@@ -13,7 +13,7 @@ export function AuthProvider({children}:{children:ReactNode}) {
   const login=useCallback(async(phone:string,password:string)=>{const next=await mobileApi.login(phone,password);await apply(next);return next},[apply])
   const logout=useCallback(async()=>{const token=session?.refreshToken;setSession(null);setProfile(null);mobileApi.setAccessToken('');await SecureStore.deleteItemAsync(REFRESH_KEY);if(token)await mobileApi.logout(token).catch(()=>undefined)},[session?.refreshToken])
   const reloadProfile=useCallback(async()=>{setProfile(await mobileApi.me())},[])
-  const value=useMemo(()=>({session,profile,loading,login,logout,reloadProfile}),[session,profile,loading])
+  const value=useMemo(()=>({session,profile,loading,login,logout,reloadProfile}),[session,profile,loading,login,logout,reloadProfile])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 export function useAuth(){const value=useContext(AuthContext);if(!value)throw new Error('useAuth must be used inside AuthProvider');return value}

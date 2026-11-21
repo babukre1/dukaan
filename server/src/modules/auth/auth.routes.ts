@@ -12,7 +12,7 @@ import { changePassword, getCurrentUser, login, logout, rotateRefreshToken } fro
 const router = Router()
 const loginSchema = z.object({ phoneNumber: z.string().min(8).max(30), password: z.string().min(1).max(200), clientType: z.enum(['WEB', 'MOBILE']).default('WEB') })
 const refreshSchema = z.object({ refreshToken: z.string().min(20).optional() })
-const passwordSchema = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(10).max(200) })
+const passwordSchema = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(8).max(200) })
 const cookieName = 'dukaanflow_refresh'
 
 function readCookie(header: string | undefined, name: string) {

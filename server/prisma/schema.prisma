@@ -47,6 +47,27 @@ enum SubscriptionEventType {
   CORRECTED
 }
 
+enum DebtEntryType {
+  OPENING_BALANCE
+  MANUAL_DEBT
+  REPAYMENT
+  ADJUSTMENT
+  REVERSAL
+}
+
+enum PaymentMethod {
+  CASH
+  MOBILE_MONEY
+  OTHER
+}
+
+enum StockMovementType {
+  OPENING_STOCK
+  STOCK_IN
+  ADJUSTMENT
+  REVERSAL
+}
+
 model User {
   id                 String              @id @default(uuid()) @db.Uuid
   fullName           String              @db.VarChar(120)
@@ -63,6 +84,9 @@ model User {
   refreshSessions    RefreshSession[]
   subscriptionEvents SubscriptionEvent[] @relation("SubscriptionActor")
   auditLogs          AdminAuditLog[]     @relation("AuditActor")
+  debtEntries        DebtEntry[]         @relation("DebtEntryActor")
+  payments           Payment[]           @relation("PaymentActor")
+  stockMovements     StockMovement[]     @relation("StockMovementActor")
 
   @@index([platformRole, isActive])
   @@map("users")
@@ -80,6 +104,13 @@ model Shop {
   subscription       ShopSubscription?
   subscriptionEvents SubscriptionEvent[]
   auditLogs          AdminAuditLog[]
+  customers          Customer[]
+  debtEntries        DebtEntry[]
+  payments           Payment[]
+  categories         Category[]
+  products           Product[]
+  inventoryBalances  InventoryBalance[]
+  stockMovements     StockMovement[]
 
   @@index([accountStatus, createdAt])
   @@index([name])
@@ -197,4 +228,152 @@ model AdminAuditLog {
   @@index([actorUserId, createdAt(sort: Desc)])
   @@index([entityType, entityId])
   @@map("admin_audit_logs")
+}
+
+model Customer {
+  id                 String      @id @default(uuid()) @db.Uuid
+  shopId             String      @db.Uuid
+  fullName           String      @db.VarChar(150)
+  phoneNumber        String?     @db.VarChar(20)
+  address            String?     @db.VarChar(300)
+  notes              String?     @db.VarChar(1000)
+  outstandingBalance Decimal     @default(0) @db.Decimal(18, 2)
+  archivedAt         DateTime?   @db.Timestamptz(3)
+  createdAt          DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime    @updatedAt @db.Timestamptz(3)
+  shop               Shop        @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  debtEntries        DebtEntry[]
+  payments           Payment[]
+
+  @@unique([id, shopId])
+  @@unique([shopId, phoneNumber])
+  @@index([shopId, createdAt(sort: Desc)])
+  @@index([shopId, fullName])
+  @@index([shopId, outstandingBalance])
+  @@map("customers")
+}
+
+model DebtEntry {
+  id              String        @id @default(uuid()) @db.Uuid
+  shopId          String        @db.Uuid
+  customerId      String        @db.Uuid
+  paymentId       String?       @db.Uuid
+  type            DebtEntryType
+  amount          Decimal       @db.Decimal(18, 2)
+  description     String?       @db.VarChar(500)
+  reversalOfId    String?       @unique @db.Uuid
+  idempotencyKey  String?       @db.VarChar(120)
+  payloadHash     String?       @db.Char(64)
+  createdByUserId String        @db.Uuid
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+  shop            Shop          @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  customer        Customer      @relation(fields: [customerId, shopId], references: [id, shopId], onDelete: Restrict)
+  payment         Payment?      @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  reversalOf      DebtEntry?    @relation("DebtReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversedBy      DebtEntry?    @relation("DebtReversal")
+  createdBy       User          @relation("DebtEntryActor", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([shopId, idempotencyKey])
+  @@index([shopId, customerId, createdAt(sort: Desc)])
+  @@map("debt_entries")
+}
+
+model Payment {
+  id              String        @id @default(uuid()) @db.Uuid
+  shopId          String        @db.Uuid
+  customerId      String        @db.Uuid
+  amount          Decimal       @db.Decimal(18, 2)
+  method          PaymentMethod
+  reference       String?       @db.VarChar(120)
+  notes           String?       @db.VarChar(500)
+  receivedAt      DateTime      @db.Timestamptz(3)
+  reversedAt      DateTime?     @db.Timestamptz(3)
+  reversalReason  String?       @db.VarChar(500)
+  createdByUserId String        @db.Uuid
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+  shop            Shop          @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  customer        Customer      @relation(fields: [customerId, shopId], references: [id, shopId], onDelete: Restrict)
+  createdBy       User          @relation("PaymentActor", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  debtEntries     DebtEntry[]
+
+  @@index([shopId, customerId, receivedAt(sort: Desc)])
+  @@map("payments")
+}
+
+model Category {
+  id         String    @id @default(uuid()) @db.Uuid
+  shopId     String    @db.Uuid
+  name       String    @db.VarChar(100)
+  archivedAt DateTime? @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @db.Timestamptz(3)
+  shop       Shop      @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  products   Product[]
+
+  @@unique([id, shopId])
+  @@unique([shopId, name])
+  @@index([shopId, archivedAt])
+  @@map("categories")
+}
+
+model Product {
+  id           String            @id @default(uuid()) @db.Uuid
+  shopId       String            @db.Uuid
+  categoryId   String?           @db.Uuid
+  name         String            @db.VarChar(200)
+  description  String?           @db.VarChar(500)
+  unit         String            @db.VarChar(30)
+  sellingPrice Decimal           @db.Decimal(18, 2)
+  costPrice    Decimal?          @db.Decimal(18, 2)
+  minimumStock Decimal           @default(0) @db.Decimal(18, 3)
+  isActive     Boolean           @default(true)
+  createdAt    DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime          @updatedAt @db.Timestamptz(3)
+  shop         Shop              @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  category     Category?         @relation(fields: [categoryId, shopId], references: [id, shopId], onDelete: Restrict)
+  balance      InventoryBalance?
+  movements    StockMovement[]
+
+  @@unique([id, shopId])
+  @@unique([shopId, name])
+  @@index([shopId, categoryId])
+  @@index([shopId, isActive])
+  @@map("products")
+}
+
+model InventoryBalance {
+  productId String   @id @db.Uuid
+  shopId    String   @db.Uuid
+  quantity  Decimal  @default(0) @db.Decimal(18, 3)
+  version   Int      @default(0)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  product   Product  @relation(fields: [productId, shopId], references: [id, shopId], onDelete: Restrict)
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Restrict)
+
+  @@index([shopId, quantity])
+  @@map("inventory_balances")
+}
+
+model StockMovement {
+  id              String            @id @default(uuid()) @db.Uuid
+  shopId          String            @db.Uuid
+  productId       String            @db.Uuid
+  type            StockMovementType
+  quantityChange  Decimal           @db.Decimal(18, 3)
+  quantityBefore  Decimal           @db.Decimal(18, 3)
+  quantityAfter   Decimal           @db.Decimal(18, 3)
+  unitCost        Decimal?          @db.Decimal(18, 2)
+  reason          String?           @db.VarChar(50)
+  note            String?           @db.VarChar(500)
+  idempotencyKey  String?           @db.VarChar(120)
+  payloadHash     String?           @db.Char(64)
+  createdByUserId String            @db.Uuid
+  createdAt       DateTime          @default(now()) @db.Timestamptz(3)
+  shop            Shop              @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  product         Product           @relation(fields: [productId, shopId], references: [id, shopId], onDelete: Restrict)
+  createdBy       User              @relation("StockMovementActor", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([shopId, idempotencyKey])
+  @@index([shopId, productId, createdAt(sort: Desc)])
+  @@map("stock_movements")
 }

@@ -14,6 +14,14 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 export type MobileSession = { accessToken: string; refreshToken: string; user: { id: string; fullName: string; phoneNumber: string; platformRole: string; mustChangePassword: boolean } }
 export type CurrentUser = { id: string; fullName: string; phoneNumber: string; platformRole: string; mustChangePassword: boolean; shopId?: string; shopName?: string; shopPhoneNumber?: string; currencyCode?: string; accountStatus?: 'ACTIVE'|'SUSPENDED'|'INACTIVE' }
 export type Subscription = { planName: string; planType: string; startsAt: string; expiresAt: string; effectiveStatus: 'PENDING'|'TRIAL'|'ACTIVE'|'EXPIRED'|'CANCELLED'; daysRemaining: number; access: 'FULL'|'READ_ONLY'|'RESTRICTED'|'BLOCKED' } | null
+export type Pagination<T> = { items: T[]; pagination: { page:number;limit:number;total:number;pages:number } }
+export type Customer = { id:string;fullName:string;phoneNumber?:string;address?:string;notes?:string;outstandingBalance:string;totalPaid?:string }
+export type DebtEntry = { id:string;type:string;amount:string;description?:string;createdAt:string;isReversed?:boolean;method?:string;reference?:string }
+export type DebtSummary = { totalOutstanding:string;totalCustomers:number;customersWithDebt:number;receivedToday:string;receivedInRange:string;recentTransactions:DebtEntry[] }
+export type Product = { id:string;name:string;description?:string;categoryId?:string;categoryName?:string;unit:string;sellingPrice:string;costPrice?:string;minimumStock:string;quantity:string;version:number;stockStatus:'IN_STOCK'|'LOW_STOCK'|'OUT_OF_STOCK';isActive:boolean }
+export type StockMovement = { id:string;type:string;quantityChange:string;quantityBefore:string;quantityAfter:string;reason?:string;note?:string;createdAt:string }
+export type InventorySummary = { totalProducts:number;lowStock:number;outOfStock:number }
+const mutationKey=()=>`${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 export const mobileApi = {
   setAccessToken(token: string) { accessToken = token },
@@ -23,4 +31,23 @@ export const mobileApi = {
   me: () => request<CurrentUser>('/auth/me'),
   subscription: () => request<Subscription>('/shop/subscription'),
   changePassword: (currentPassword: string, newPassword: string) => request('/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }),
+  customers: (query='') => request<Pagination<Customer>>(`/customers${query}`),
+  customer: (id:string) => request<Customer>(`/customers/${id}`),
+  createCustomer: (body:Record<string,unknown>) => request<Customer>('/customers',{method:'POST',body:JSON.stringify(body)}),
+  updateCustomer: (id:string,body:Record<string,unknown>) => request<Customer>(`/customers/${id}`,{method:'PATCH',body:JSON.stringify(body)}),
+  archiveCustomer: (id:string) => request(`/customers/${id}`,{method:'DELETE'}),
+  debtEntries: (id:string,page=1) => request<Pagination<DebtEntry>>(`/customers/${id}/debts?page=${page}&limit=30`),
+  statement: (id:string,page=1) => request<{customer:Customer;totalDebtAdded:string;totalRepayments:string;transactions:Pagination<DebtEntry>}>(`/customers/${id}/statement?page=${page}&limit=30`),
+  addDebt: (id:string,body:Record<string,unknown>) => request(`/customers/${id}/debts`,{method:'POST',headers:{'Idempotency-Key':mutationKey()},body:JSON.stringify(body)}),
+  receivePayment: (id:string,body:Record<string,unknown>) => request(`/customers/${id}/payments`,{method:'POST',headers:{'Idempotency-Key':mutationKey()},body:JSON.stringify(body)}),
+  debtSummary: () => request<DebtSummary>('/debts/summary'),
+  products: (query='') => request<Pagination<Product>>(`/products${query}`),
+  product: (id:string) => request<Product>(`/products/${id}`),
+  createProduct: (body:Record<string,unknown>) => request<Product>('/products',{method:'POST',body:JSON.stringify(body)}),
+  updateProduct: (id:string,body:Record<string,unknown>) => request<Product>(`/products/${id}`,{method:'PATCH',body:JSON.stringify(body)}),
+  archiveProduct: (id:string) => request(`/products/${id}`,{method:'DELETE'}),
+  receiveStock: (id:string,body:Record<string,unknown>) => request(`/products/${id}/stock/receive`,{method:'POST',headers:{'Idempotency-Key':mutationKey()},body:JSON.stringify(body)}),
+  adjustStock: (id:string,body:Record<string,unknown>) => request(`/products/${id}/stock/adjust`,{method:'POST',headers:{'Idempotency-Key':mutationKey()},body:JSON.stringify(body)}),
+  stockMovements: (id:string,page=1) => request<Pagination<StockMovement>>(`/products/${id}/stock/movements?page=${page}&limit=30`),
+  inventorySummary: () => request<InventorySummary>('/inventory/summary'),
 }

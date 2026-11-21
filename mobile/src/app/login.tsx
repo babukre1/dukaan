@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native'
 import { SafeAreaView as NativeSafeAreaView } from 'react-native-safe-area-context'
 import { withUniwind } from 'uniwind'
-import { colors } from '@/constants/design'
 import { useAuth } from '@/providers/auth'
 
 const SafeAreaView = withUniwind(NativeSafeAreaView)

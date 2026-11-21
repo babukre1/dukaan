@@ -2,7 +2,7 @@
 
 DukaanFlow is a multi-tenant SaaS foundation for small shops. Platform administrators use the React portal in `admin/`; shop owners use the Expo application in `mobile/`; both share the Express API in `server/`.
 
-Phases 1–3 implement the project foundation, phone/password authentication, shop administration, subscriptions, and subscription-aware access. Debt, inventory, and sales services are intentionally deferred to later phases.
+Phases 1-5 implement the project foundation, authentication, shop administration, subscriptions, customer debt management, and inventory management. Sales remain deferred to Phase 6.
 
 ## Architecture
 
@@ -145,7 +145,7 @@ The admin production API URL defaults to `https://dukaanapi.abubakr.so/api/v1`. 
 VITE_API_URL=https://dukaanapi.abubakr.so/api/v1
 ```
 
-Apply production database migrations separately before first use; do not run development migrations from a Vercel request.
+Vercel runs the checked-in SQL migrations through the checksum-verified deployment runner and then executes the idempotent plan seed before compiling the server. Production must provide `DIRECT_URL` so migrations use Neon's direct connection rather than its transaction pooler. Local developers can continue using Prisma's `migrate deploy` command.
 
 ## Authentication and tenant isolation
 
@@ -196,6 +196,33 @@ Subscriptions:
 - `GET /api/v1/admin/shops/:shopId/subscription/history`
 - `GET /api/v1/shop/subscription`
 
+Customers and debt:
+
+- `GET|POST /api/v1/customers`
+- `GET|PATCH|DELETE /api/v1/customers/:id`
+- `POST /api/v1/customers/:id/debts/opening`
+- `POST|GET /api/v1/customers/:id/debts`
+- `GET /api/v1/customers/:id/statement`
+- `POST /api/v1/customers/:id/payments`
+- `POST /api/v1/debts/:id/reverse`
+- `POST /api/v1/payments/:id/reverse`
+- `GET /api/v1/debts/summary`
+
+Products and inventory:
+
+- `GET|POST /api/v1/categories`
+- `PATCH|DELETE /api/v1/categories/:id`
+- `GET|POST /api/v1/products`
+- `GET|PATCH|DELETE /api/v1/products/:id`
+- `GET /api/v1/products/:id/stock`
+- `POST /api/v1/products/:id/stock/receive`
+- `POST /api/v1/products/:id/stock/adjust`
+- `GET /api/v1/products/:id/stock/movements`
+- `GET /api/v1/inventory/summary`
+- `GET /api/v1/inventory/low-stock`
+
+Financial and stock mutations require an `Idempotency-Key` header. Debt and stock ledgers are append-only; cached balances are updated in the same PostgreSQL transaction. Repayments use a conditional update to prevent overpayment. Physical stock adjustments require the quantity originally shown to the user so concurrent changes return a conflict rather than being overwritten.
+
 ## Verification
 
 ```bash
@@ -213,6 +240,6 @@ npm run test:server
 
 Critical database and concurrency behavior should also be tested against a dedicated PostgreSQL test database in CI. Unit tests cover phone normalization and UTC calendar/status behavior.
 
-## Deferred work
+## Phase 6 and known limitations
 
-Customer debt, payments, products, inventory balances, stock movements, sales, returns, receipts, payment gateways, suppliers, and expenses are not implemented in Phases 1–3. Their existing visual prototypes must not be treated as real backend data.
+Sales, product-linked credit sales, returns, receipts/PDF export, payment-provider integrations, suppliers, purchase orders, expenses, barcode scanning, unit conversion, and multi-warehouse inventory remain intentionally deferred. Payment references are manual notes and are not proof of settlement. Daily summaries currently use UTC; a configurable shop reporting timezone is a later enhancement.

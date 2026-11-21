@@ -1,0 +1,3 @@
+import { Text, TextInput, View, type TextInputProps } from 'react-native'
+export function FormField({label,error,...props}:TextInputProps&{label:string;error?:string}){return <View className="mt-3"><Text className="mb-1.5 text-[10px] font-bold text-ink">{label}</Text><TextInput {...props} placeholderTextColor="#89918B" className="min-h-11 rounded-[9px] border border-[#D6DCD7] px-[11px] text-xs text-ink"/>{error&&<Text className="mt-1 text-[9px] text-danger">{error}</Text>}</View>}
+export function FormError({message}:{message:string}){return message?<Text className="mt-3 rounded-lg bg-[#FBE3E5] p-3 text-[11px] text-danger">{message}</Text>:null}
