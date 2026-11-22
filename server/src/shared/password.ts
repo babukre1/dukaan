@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt'
 import { AppError } from './app-error.js'
+import { PASSWORD_POLICY_MESSAGE, strongPasswordSchema } from './password-policy.js'
 
 type ArgonModule = {
   argon2id: number
@@ -18,9 +19,8 @@ async function loadArgon(): Promise<ArgonModule | null> {
 }
 
 export function assertStrongPassword(password: string): void {
-  if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
-    throw new AppError(400, 'VALIDATION_ERROR', 'Password must be at least 8 characters and include a letter and a number')
-  }
+  if (!strongPasswordSchema.safeParse(password).success)
+    throw new AppError(400, 'VALIDATION_ERROR', PASSWORD_POLICY_MESSAGE)
 }
 
 export async function hashPassword(password: string): Promise<string> {

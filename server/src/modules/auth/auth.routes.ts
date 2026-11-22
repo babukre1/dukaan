@@ -6,13 +6,14 @@ import { rateLimit } from '../../middleware/rate-limit.js'
 import { validate } from '../../middleware/validate.js'
 import { asyncHandler } from '../../shared/async-handler.js'
 import { AppError } from '../../shared/app-error.js'
+import { strongPasswordSchema } from '../../shared/password-policy.js'
 import { success } from '../../shared/response.js'
 import { changePassword, getCurrentUser, login, logout, rotateRefreshToken } from './auth.service.js'
 
 const router = Router()
 const loginSchema = z.object({ phoneNumber: z.string().min(8).max(30), password: z.string().min(1).max(200), clientType: z.enum(['WEB', 'MOBILE']).default('WEB') })
 const refreshSchema = z.object({ refreshToken: z.string().min(20).optional() })
-const passwordSchema = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(8).max(200) })
+const passwordSchema = z.object({ currentPassword: z.string().min(1), newPassword: strongPasswordSchema })
 const cookieName = 'dukaanflow_refresh'
 
 function readCookie(header: string | undefined, name: string) {
