@@ -2000,6 +2000,14 @@ function App() {
   const [checking, setChecking] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
   useEffect(() => {
+    api.setSessionExpiredHandler(() => {
+      setAdminName("");
+      setMustChange(false);
+      setPage("dashboard");
+    });
+    return () => api.setSessionExpiredHandler(null);
+  }, []);
+  useEffect(() => {
     api
       .refresh()
       .then((session) => {

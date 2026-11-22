@@ -3,6 +3,13 @@ const API_URL = import.meta.env.VITE_API_URL ??
     ? "https://dukaanapi.abubakr.so/api/v1"
     : "http://localhost:4000/api/v1");
 let accessToken = "";
+let refreshPromise: Promise<Session> | null = null;
+let sessionExpiredHandler: (() => void) | null = null;
+
+function clearSession() {
+  accessToken = "";
+  sessionExpiredHandler?.();
+}
 
 type Envelope<T> =
   | { success: true; data: T }
@@ -24,10 +31,11 @@ async function request<T>(
   const payload = (await response.json()) as Envelope<T>;
   if (response.status === 401 && retry && path !== "/auth/refresh") {
     try {
-      await api.refresh();
+      await refreshSession();
       return request<T>(path, init, false);
     } catch {
-      accessToken = "";
+      clearSession();
+      throw new Error("Your session has expired. Please log in again.");
     }
   }
   if (!response.ok || !payload.success)
@@ -35,7 +43,28 @@ async function request<T>(
   return payload.data;
 }
 
+function refreshSession(): Promise<Session> {
+  if (!refreshPromise) {
+    refreshPromise = request<Session>(
+      "/auth/refresh",
+      { method: "POST", body: "{}" },
+      false,
+    )
+      .then((session) => {
+        accessToken = session.accessToken;
+        return session;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
 export const api = {
+  setSessionExpiredHandler(handler: (() => void) | null) {
+    sessionExpiredHandler = handler;
+  },
   async login(phoneNumber: string, password: string) {
     const session = await request<Session>(
       "/auth/login",
@@ -48,15 +77,7 @@ export const api = {
     accessToken = session.accessToken;
     return session;
   },
-  async refresh() {
-    const session = await request<Session>(
-      "/auth/refresh",
-      { method: "POST", body: "{}" },
-      false,
-    );
-    accessToken = session.accessToken;
-    return session;
-  },
+  refresh: refreshSession,
   me: () => request<Record<string, unknown>>("/auth/me"),
   async logout() {
     try {
