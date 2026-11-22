@@ -2,6 +2,7 @@
   "name": "dukaanflow",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "npm@10.9.4",
   "description": "Multi-tenant shop management platform",
   "workspaces": [
     "admin",
@@ -30,7 +31,7 @@
     "verify": "npm run build && npm run typecheck && npm run lint && npm run test:server"
   },
   "engines": {
-    "node": ">=22.18.0",
+    "node": "22.x",
     "npm": ">=10.0.0"
   }
 }
