@@ -6,8 +6,8 @@ import { env } from '../../config/env.js'
 import { AppError, unauthorized } from '../../shared/app-error.js'
 import { normalizePhoneNumber } from '../../shared/phone.js'
 import { assertStrongPassword, hashPassword, verifyPassword } from '../../shared/password.js'
+import { userFromRefreshSession, type RefreshSessionUserRow, type UserRow } from './auth-user.js'
 
-type UserRow = { id: string; fullName: string; phoneNumber: string; passwordHash: string; platformRole: 'ADMIN' | 'OWNER'; isActive: boolean; mustChangePassword: boolean; tokenVersion: number }
 type SessionMeta = { userAgent?: string; ipAddress?: string }
 
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex')
@@ -61,7 +61,7 @@ export async function rotateRefreshToken(refreshToken: string, meta: SessionMeta
     if (!session.isActive || new Date(session.expiresAt) <= new Date()) throw unauthorized('Refresh session has expired')
     const refresh = await createRefreshSession(client, session.userId, meta, session.familyId)
     await client.query('UPDATE "refresh_sessions" SET "revokedAt" = CURRENT_TIMESTAMP, "replacedBy" = $2 WHERE "id" = $1', [session.id, refresh.sessionId])
-    const user = session as UserRow
+    const user = userFromRefreshSession(session as RefreshSessionUserRow)
     return { accessToken: accessToken(user), refreshToken: refresh.token, expiresIn: env.ACCESS_TOKEN_TTL, user: publicUser(user) }
   })
   if (!rotated) throw unauthorized('Refresh token reuse detected; please log in again')
