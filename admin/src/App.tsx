@@ -44,6 +44,7 @@ type IconName =
   | "box"
   | "cart"
   | "refresh"
+  | "logout"
   | "close";
 
 const paths: Record<IconName, ReactNode> = {
@@ -148,6 +149,12 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <path d="M20 7h-5V2" />
       <path d="M20 7a9 9 0 1 0 1 8" />
+    </>
+  ),
+  logout: (
+    <>
+      <path d="M10 17l5-5-5-5M15 12H3" />
+      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
     </>
   ),
   close: <path d="m6 6 12 12M18 6 6 18" />,
@@ -269,9 +276,15 @@ function Button({
 function Sidebar({
   page,
   setPage,
+  adminName,
+  onLogout,
+  loggingOut,
 }: {
   page: Page;
   setPage: (page: Page) => void;
+  adminName: string;
+  onLogout: () => void;
+  loggingOut: boolean;
 }) {
   const nav: [Page, IconName, string][] = [
     ["dashboard", "dashboard", "Dashboard"],
@@ -297,11 +310,21 @@ function Sidebar({
         ))}
       </nav>
       <div className="sidebar-user">
-        <div className="avatar">A</div>
-        <div>
-          <strong>Admin</strong>
+        <div className="avatar">{adminName.charAt(0).toUpperCase()}</div>
+        <div className="sidebar-user-copy">
+          <strong>{adminName}</strong>
           <small>Super administrator</small>
         </div>
+        <button
+          type="button"
+          className="sidebar-logout"
+          onClick={onLogout}
+          disabled={loggingOut}
+          aria-label="Log out"
+          title="Log out"
+        >
+          <Icon name="logout" />
+        </button>
       </div>
     </aside>
   );
@@ -1975,6 +1998,7 @@ function App() {
   const [adminName, setAdminName] = useState("");
   const [mustChange, setMustChange] = useState(false);
   const [checking, setChecking] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
   useEffect(() => {
     api
       .refresh()
@@ -1987,6 +2011,19 @@ function App() {
       .catch(() => undefined)
       .finally(() => setChecking(false));
   }, []);
+  async function logout() {
+    setLoggingOut(true);
+    try {
+      await api.logout();
+    } catch {
+      // Local session cleanup still signs the administrator out if the request fails.
+    } finally {
+      setAdminName("");
+      setMustChange(false);
+      setPage("dashboard");
+      setLoggingOut(false);
+    }
+  }
   if (checking) return <Loading message="Restoring secure session..." />;
   if (!adminName)
     return (
@@ -2016,7 +2053,13 @@ function App() {
   };
   return (
     <div className="app-shell">
-      <Sidebar page={page} setPage={setPage} />
+      <Sidebar
+        page={page}
+        setPage={setPage}
+        adminName={adminName}
+        onLogout={logout}
+        loggingOut={loggingOut}
+      />
       <main>{screens[page]}</main>
     </div>
   );

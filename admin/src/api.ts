@@ -59,8 +59,11 @@ export const api = {
   },
   me: () => request<Record<string, unknown>>("/auth/me"),
   async logout() {
-    await request("/auth/logout", { method: "POST", body: "{}" }, false);
-    accessToken = "";
+    try {
+      await request("/auth/logout", { method: "POST", body: "{}" }, false);
+    } finally {
+      accessToken = "";
+    }
   },
   changePassword: (currentPassword: string, newPassword: string) =>
     request("/auth/change-password", {
