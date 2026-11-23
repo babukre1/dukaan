@@ -113,7 +113,7 @@ export async function listDebtEntries(shopId: string, customerId: string, page: 
 export async function statement(shopId: string, customerId: string, page: number, limit: number) {
   const [customer, transactions, totals] = await Promise.all([
     getCustomer(shopId, customerId), listDebtEntries(shopId, customerId, page, limit),
-    db.query(`SELECT COALESCE(SUM("amount") FILTER (WHERE "amount">0),0)::text AS "totalDebtAdded",COALESCE(-SUM("amount") FILTER (WHERE "amount"<0),0)::text AS "totalRepayments" FROM "debt_entries" WHERE "shopId"=$1 AND "customerId"=$2`, [shopId, customerId]),
+    db.query(`SELECT COALESCE(SUM("amount") FILTER (WHERE "amount">0),0)::text AS "totalDebtAdded",COALESCE(-SUM("amount") FILTER (WHERE "type"='REPAYMENT'),0)::text AS "totalRepayments" FROM "debt_entries" WHERE "shopId"=$1 AND "customerId"=$2`, [shopId, customerId]),
   ])
   return { customer, ...totals.rows[0], transactions }
 }
@@ -136,7 +136,7 @@ export async function reverseDebt(shopId: string, entryId: string, userId: strin
 
 export async function debtSummary(shopId: string, from?: string, to?: string) {
   const result = await db.query(`SELECT COALESCE(SUM(c."outstandingBalance"),0)::text AS "totalOutstanding",COUNT(*)::int AS "totalCustomers",COUNT(*) FILTER (WHERE c."outstandingBalance">0)::int AS "customersWithDebt" FROM "customers" c WHERE c."shopId"=$1 AND c."archivedAt" IS NULL`, [shopId])
-  const payments = await db.query(`SELECT COALESCE(SUM("amount") FILTER (WHERE "receivedAt">=CURRENT_DATE AND "reversedAt" IS NULL),0)::text AS "receivedToday",COALESCE(SUM("amount") FILTER (WHERE ($2::timestamptz IS NULL OR "receivedAt">=$2) AND ($3::timestamptz IS NULL OR "receivedAt"<$3) AND "reversedAt" IS NULL),0)::text AS "receivedInRange" FROM "payments" WHERE "shopId"=$1`, [shopId, from || null, to || null])
+  const payments = await db.query(`SELECT COALESCE(SUM("amount") FILTER (WHERE "receivedAt">=CURRENT_DATE AND "reversedAt" IS NULL),0)::text AS "receivedToday",COALESCE(SUM("amount") FILTER (WHERE ($2::timestamptz IS NULL OR "receivedAt">=$2) AND ($3::timestamptz IS NULL OR "receivedAt"<$3) AND "reversedAt" IS NULL),0)::text AS "receivedInRange" FROM "payments" WHERE "shopId"=$1 AND "saleId" IS NULL`, [shopId, from || null, to || null])
   const recent = await db.query(`SELECT de.*,c."fullName" AS "customerName" FROM "debt_entries" de JOIN "customers" c ON c."id"=de."customerId" WHERE de."shopId"=$1 ORDER BY de."createdAt" DESC LIMIT 10`, [shopId])
   return { ...result.rows[0], ...payments.rows[0], recentTransactions: recent.rows }
 }

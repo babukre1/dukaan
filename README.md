@@ -221,6 +221,21 @@ Products and inventory:
 - `GET /api/v1/inventory/summary`
 - `GET /api/v1/inventory/low-stock`
 
+Sales, receipts, and returns:
+
+- `POST|GET /api/v1/sales`
+- `GET /api/v1/sales/summary`
+- `GET /api/v1/sales/:id`
+- `GET /api/v1/sales/:id/receipt`
+- `POST /api/v1/sales/:id/void`
+- `POST|GET /api/v1/sales/:id/returns`
+
+Creating a sale is one PostgreSQL transaction: the API locks a shop-scoped idempotency key, allocates the next sale number, calculates totals from stored product prices, conditionally deducts stock, appends stock movements, records an immediate payment, and creates the unpaid customer debt when applicable. Duplicate product lines are merged before validation and inventory rows are processed in a consistent order.
+
+Sale item names, units, prices, and costs are snapshots, so later product edits do not change old receipts. Fully paid walk-in sales do not require a customer. Credit and partial-payment sales require a shop customer and append a `CREDIT_SALE` debt entry. Immediate sale payments are linked to the sale but are deliberately not treated as old-debt repayments.
+
+Voids and returns preserve the original sale and use compensating stock and debt records. A paid void requires explicit confirmation that money was refunded. Returns allocate sale-level discounts deterministically, cap cumulative returned quantities and values, and require the owner to explicitly split the outcome between customer-debt reduction and an issued refund. Damaged or expired returned items can be recorded without restocking them.
+
 Financial and stock mutations require an `Idempotency-Key` header. Debt and stock ledgers are append-only; cached balances are updated in the same PostgreSQL transaction. Repayments use a conditional update to prevent overpayment. Physical stock adjustments require the quantity originally shown to the user so concurrent changes return a conflict rather than being overwritten.
 
 ## Verification
@@ -242,4 +257,6 @@ Critical database and concurrency behavior should also be tested against a dedic
 
 ## Phase 6 and known limitations
 
-Sales, product-linked credit sales, returns, receipts/PDF export, payment-provider integrations, suppliers, purchase orders, expenses, barcode scanning, unit conversion, and multi-warehouse inventory remain intentionally deferred. Payment references are manual notes and are not proof of settlement. Daily summaries currently use UTC; a configurable shop reporting timezone is a later enhancement.
+Phase 6 provides paid, credit, and partial sales; inventory and debt integration; sale history; text receipts with native device sharing; voids; partial/full returns; and sales summaries. Receipts are intentionally text-based rather than PDF/printer documents. Refunds are owner-confirmed records and are not connected to cash drawers, mobile-money providers, or bank APIs. Debt remains an account-level balance, so ambiguous returns require an explicit debt-reduction/refund decision instead of automatic invoice allocation.
+
+Suppliers, purchase orders, expenses, taxes, barcode scanning, unit conversion, multiple branches/warehouses, complex accounting, and payment-provider integrations remain out of scope. Daily summaries use the date boundaries supplied by the client; a persisted per-shop reporting timezone is a later enhancement.

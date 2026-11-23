@@ -1,6 +1,7 @@
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? (__DEV__
-  ? 'http://localhost:4000/api/v1'
-  : 'https://dukaanapi.abubakr.so/api/v1')
+// A physical phone resolves `localhost` to the phone itself, not the computer
+// running Metro. Use the deployed API by default in every environment. Local
+// backend development can override this with EXPO_PUBLIC_API_URL in .env.local.
+const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://dukaanapi.abubakr.so/api/v1'
 let accessToken = ''
 
 type Envelope<T> = { success: true; data: T } | { success: false; error: { code: string; message: string } }
@@ -21,7 +22,11 @@ export type DebtSummary = { totalOutstanding:string;totalCustomers:number;custom
 export type Product = { id:string;name:string;description?:string;categoryId?:string;categoryName?:string;unit:string;sellingPrice:string;costPrice?:string;minimumStock:string;quantity:string;version:number;stockStatus:'IN_STOCK'|'LOW_STOCK'|'OUT_OF_STOCK';isActive:boolean }
 export type StockMovement = { id:string;type:string;quantityChange:string;quantityBefore:string;quantityAfter:string;reason?:string;note?:string;createdAt:string }
 export type InventorySummary = { totalProducts:number;lowStock:number;outOfStock:number }
-const mutationKey=()=>`${Date.now()}-${Math.random().toString(36).slice(2)}`
+export type SaleItem = { id:string;productId:string;productNameSnapshot:string;unitSnapshot:string;quantity:string;unitPrice:string;lineSubtotal:string;returnedQuantity:string;returnedAmount:string }
+export type SaleReturn = { id:string;returnNumber:number;totalAmount:string;debtReductionAmount:string;refundAmount:string;refundMethod?:string;reason?:string;createdAt:string;items:{saleItemId:string;quantity:string;lineRefundAmount:string;restock:boolean}[] }
+export type Sale = { id:string;saleNumber:string;customerId?:string;customerName?:string;customerPhone?:string;shopName?:string;shopPhoneNumber?:string;currencyCode?:string;subtotal:string;discountAmount:string;totalAmount:string;paidAmount:string;initialUnpaidAmount:string;paymentStatus:'PAID'|'PARTIALLY_PAID'|'UNPAID';paymentMethod?:string;status:'COMPLETED'|'PARTIALLY_RETURNED'|'RETURNED'|'VOIDED';notes?:string;createdAt:string;items:SaleItem[];returns:SaleReturn[] }
+export type SalesSummary = { totalSales:string;saleCount:number;paidSales:number;creditSales:number;partialSales:number;returnedSales:number;immediatePayments:string;refundTotal:string;creditSalesValue:string }
+export const mutationKey=()=>`${Date.now()}-${Math.random().toString(36).slice(2)}`
 
 export const mobileApi = {
   setAccessToken(token: string) { accessToken = token },
@@ -50,4 +55,11 @@ export const mobileApi = {
   adjustStock: (id:string,body:Record<string,unknown>) => request(`/products/${id}/stock/adjust`,{method:'POST',headers:{'Idempotency-Key':mutationKey()},body:JSON.stringify(body)}),
   stockMovements: (id:string,page=1) => request<Pagination<StockMovement>>(`/products/${id}/stock/movements?page=${page}&limit=30`),
   inventorySummary: () => request<InventorySummary>('/inventory/summary'),
+  sales: (query='') => request<Pagination<Sale>>(`/sales${query}`),
+  sale: (id:string) => request<Sale>(`/sales/${id}`),
+  receipt: (id:string) => request<Sale>(`/sales/${id}/receipt`),
+  createSale: (body:Record<string,unknown>,key:string) => request<Sale>('/sales',{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify(body)}),
+  voidSale: (id:string,body:Record<string,unknown>,key:string) => request<Sale>(`/sales/${id}/void`,{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify(body)}),
+  returnSale: (id:string,body:Record<string,unknown>,key:string) => request<Sale>(`/sales/${id}/returns`,{method:'POST',headers:{'Idempotency-Key':key},body:JSON.stringify(body)}),
+  salesSummary: (query='') => request<SalesSummary>(`/sales/summary${query}`),
 }

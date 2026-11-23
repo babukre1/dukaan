@@ -10,6 +10,7 @@ import { shopRouter } from './modules/shops/shop.routes.js'
 import { subscriptionRouter } from './modules/subscriptions/subscription.routes.js'
 import { customerRouter } from './modules/customers/customer.routes.js'
 import { inventoryRouter } from './modules/inventory/inventory.routes.js'
+import { saleRouter } from './modules/sales/sale.routes.js'
 import { accessTestRouter } from './routes/access-test.route.js'
 import { healthRouter } from './routes/health.route.js'
 
@@ -30,6 +31,7 @@ app.use('/api/v1/admin', shopRouter)
 app.use('/api/v1', subscriptionRouter)
 app.use('/api/v1', customerRouter)
 app.use('/api/v1', inventoryRouter)
+app.use('/api/v1', saleRouter)
 app.use('/api/v1/shop/access-test', accessTestRouter)
 app.use(notFound)
 app.use(errorHandler)
