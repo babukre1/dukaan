@@ -96,7 +96,7 @@ export async function receivePayment(shopId: string, customerId: string, userId:
     const updated = await client.query('UPDATE "customers" SET "outstandingBalance"="outstandingBalance"-$3,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "shopId"=$2 AND "outstandingBalance">=$3 RETURNING "outstandingBalance"', [customerId, shopId, input.amount])
     if (!updated.rowCount) throw new AppError(409, 'PAYMENT_EXCEEDS_BALANCE', 'Payment cannot exceed the outstanding balance')
     const payment = await client.query(`INSERT INTO "payments" ("shopId","customerId","amount","method","reference","notes","receivedAt","createdByUserId") VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7::timestamptz,CURRENT_TIMESTAMP),$8) RETURNING *`, [shopId, customerId, input.amount, input.method, input.reference?.trim() || null, input.notes?.trim() || null, input.receivedAt || null, userId])
-    const entry = await client.query(`INSERT INTO "debt_entries" ("shopId","customerId","paymentId","type","amount","description","idempotencyKey","payloadHash","createdByUserId") VALUES ($1,$2,$3,'REPAYMENT',-$4,$5,$6,$7,$8) RETURNING *`, [shopId, customerId, payment.rows[0].id, input.amount, input.notes?.trim() || 'Payment received', key, hash, userId])
+    const entry = await client.query(`INSERT INTO "debt_entries" ("shopId","customerId","paymentId","type","amount","description","idempotencyKey","payloadHash","createdByUserId") VALUES ($1,$2,$3,'REPAYMENT',-($4::numeric),$5,$6,$7,$8) RETURNING *`, [shopId, customerId, payment.rows[0].id, input.amount, input.notes?.trim() || 'Payment received', key, hash, userId])
     return { payment: payment.rows[0], ledgerEntry: entry.rows[0], outstandingBalance: updated.rows[0].outstandingBalance }
   })
 }
@@ -128,7 +128,7 @@ export async function reverseDebt(shopId: string, entryId: string, userId: strin
     await customerForUpdate(client, shopId, row.customerId)
     const updated = await client.query('UPDATE "customers" SET "outstandingBalance"="outstandingBalance"-$3,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "shopId"=$2 AND "outstandingBalance"-$3>=0 RETURNING "outstandingBalance"', [row.customerId, shopId, row.amount])
     if (!updated.rowCount) throw new AppError(409, 'REVERSAL_NEGATIVE_BALANCE', 'Reversal would create a negative balance')
-    const reversal = await client.query(`INSERT INTO "debt_entries" ("shopId","customerId","type","amount","description","reversalOfId","createdByUserId") VALUES ($1,$2,'REVERSAL',-$3,$4,$5,$6) RETURNING *`, [shopId, row.customerId, row.amount, reason, entryId, userId])
+    const reversal = await client.query(`INSERT INTO "debt_entries" ("shopId","customerId","type","amount","description","reversalOfId","createdByUserId") VALUES ($1,$2,'REVERSAL',-($3::numeric),$4,$5,$6) RETURNING *`, [shopId, row.customerId, row.amount, reason, entryId, userId])
     if (row.paymentId) await client.query('UPDATE "payments" SET "reversedAt"=CURRENT_TIMESTAMP,"reversalReason"=$2 WHERE "id"=$1', [row.paymentId, reason])
     return { ...reversal.rows[0], outstandingBalance: updated.rows[0].outstandingBalance }
   })

@@ -87,7 +87,7 @@ export async function createSale(shopId: string, userId: string, input: CreateSa
       if (!updated.rowCount) throw new AppError(409, 'INSUFFICIENT_STOCK', `Insufficient stock for ${line.product.name}`, { productId: line.productId, available: line.product.quantity })
       const after = String(updated.rows[0].quantity)
       await client.query(`INSERT INTO "sale_items" ("shopId","saleId","productId","productNameSnapshot","unitSnapshot","quantity","unitPrice","unitCostSnapshot","lineSubtotal") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`, [shopId, saleId, line.productId, line.product.name, line.product.unit, quantity(line.amount), line.product.sellingPrice, line.product.costPrice, money(line.lineSubtotal)])
-      await client.query(`INSERT INTO "stock_movements" ("shopId","productId","saleId","type","quantityChange","quantityBefore","quantityAfter","note","createdByUserId") VALUES ($1,$2,$3,'SALE',-$4,$5,$6,$7,$8)`, [shopId, line.productId, saleId, quantity(line.amount), moneyQuantity(BigIntDecimal(after) + line.amount), after, saleNumber, userId])
+      await client.query(`INSERT INTO "stock_movements" ("shopId","productId","saleId","type","quantityChange","quantityBefore","quantityAfter","note","createdByUserId") VALUES ($1,$2,$3,'SALE',-($4::numeric),$5,$6,$7,$8)`, [shopId, line.productId, saleId, quantity(line.amount), moneyQuantity(BigIntDecimal(after) + line.amount), after, saleNumber, userId])
     }
     if (paid > 0n) await client.query(`INSERT INTO "payments" ("shopId","customerId","saleId","amount","method","notes","receivedAt","createdByUserId") VALUES ($1,$2,$3,$4,$5,$6,CURRENT_TIMESTAMP,$7)`, [shopId, input.customerId ?? null, saleId, money(paid), input.paymentMethod, `Initial payment for ${saleNumber}`, userId])
     const unpaid = total - paid
@@ -161,7 +161,7 @@ export async function voidSale(shopId: string, id: string, userId: string, input
       const amount = String(debt.rows[0].amount)
       const updated = await client.query('UPDATE "customers" SET "outstandingBalance"="outstandingBalance"-$3,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "shopId"=$2 AND "outstandingBalance">=$3 RETURNING "id"', [row.customerId, shopId, amount])
       if (!updated.rowCount) throw new AppError(409, 'REFUND_REQUIRES_CONFIRMATION', 'Debt from this sale has already been repaid; use a return with an explicit refund decision')
-      await client.query(`INSERT INTO "debt_entries" ("shopId","customerId","saleId","type","amount","description","reversalOfId","createdByUserId") VALUES ($1,$2,$3,'REVERSAL',-$4,$5,$6,$7)`, [shopId, row.customerId, id, amount, `Void ${row.saleNumber}: ${input.reason}`, debt.rows[0].id, userId])
+      await client.query(`INSERT INTO "debt_entries" ("shopId","customerId","saleId","type","amount","description","reversalOfId","createdByUserId") VALUES ($1,$2,$3,'REVERSAL',-($4::numeric),$5,$6,$7)`, [shopId, row.customerId, id, amount, `Void ${row.saleNumber}: ${input.reason}`, debt.rows[0].id, userId])
     }
     await client.query('UPDATE "payments" SET "reversedAt"=CURRENT_TIMESTAMP,"reversalReason"=$3 WHERE "saleId"=$1 AND "shopId"=$2 AND "reversedAt" IS NULL', [id, shopId, input.reason])
     await client.query(`UPDATE "sales" SET "status"='VOIDED',"voidedByUserId"=$3,"voidedAt"=CURRENT_TIMESTAMP,"voidReason"=$4,"voidIdempotencyKey"=$5,"voidPayloadHash"=$6,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "shopId"=$2`, [id, shopId, userId, input.reason, key, payloadHash])
@@ -226,7 +226,7 @@ export async function createReturn(shopId: string, saleId: string, userId: strin
     const number = await client.query('SELECT COALESCE(MAX("returnNumber"),0)+1 AS value FROM "sale_returns" WHERE "saleId"=$1', [saleId])
     const created = await client.query(`INSERT INTO "sale_returns" ("shopId","saleId","returnNumber","totalAmount","debtReductionAmount","refundAmount","refundMethod","reason","idempotencyKey","payloadHash","createdByUserId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING "id"`, [shopId, saleId, number.rows[0].value, money(totalReturn), money(debtReduction), money(refund), refund > 0n ? input.refundMethod : null, input.reason?.trim() || null, key, payloadHash, userId])
     const returnId = created.rows[0].id
-    if (debtReduction > 0n) await client.query(`INSERT INTO "debt_entries" ("shopId","customerId","saleId","type","amount","description","createdByUserId") VALUES ($1,$2,$3,'SALE_RETURN',-$4,$5,$6)`, [shopId, sale.customerId, saleId, money(debtReduction), `Return against ${sale.saleNumber}`, userId])
+    if (debtReduction > 0n) await client.query(`INSERT INTO "debt_entries" ("shopId","customerId","saleId","type","amount","description","createdByUserId") VALUES ($1,$2,$3,'SALE_RETURN',-($4::numeric),$5,$6)`, [shopId, sale.customerId, saleId, money(debtReduction), `Return against ${sale.saleNumber}`, userId])
     for (const line of returnLines) {
       await client.query(`INSERT INTO "sale_return_items" ("shopId","saleReturnId","saleItemId","quantity","unitRefundAmount","lineRefundAmount","restock") VALUES ($1,$2,$3,$4,$5,$6,$7)`, [shopId, returnId, line.item.id, quantity(line.amount), money(line.unitRefund), money(line.lineRefund), line.restock])
       if (line.restock) {

@@ -4,11 +4,67 @@
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://dukaanapi.abubakr.so/api/v1'
 let accessToken = ''
 
-type Envelope<T> = { success: true; data: T } | { success: false; error: { code: string; message: string } }
+type ApiFailure = { code: string; message: string; details?: unknown }
+type Envelope<T> = { success: true; data: T } | { success: false; error: ApiFailure }
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+    readonly status: number,
+    readonly method: string,
+    readonly path: string,
+    readonly details?: unknown,
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
+function reportApiError(error: ApiError) {
+  // Do not log request headers or bodies: they may contain tokens or passwords.
+  console.error('[DukaanFlow API error]', {
+    method: error.method,
+    path: error.path,
+    status: error.status,
+    code: error.code,
+    message: error.message,
+    details: error.details,
+  })
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...init.headers } })
-  const payload = await response.json() as Envelope<T>
-  if (!response.ok || !payload.success) throw new Error(payload.success ? 'Request failed' : payload.error.message)
+  const method = init.method ?? 'GET'
+  let response: Response
+  try {
+    response = await fetch(`${API_URL}${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...init.headers } })
+  } catch (cause) {
+    const error = new ApiError(cause instanceof Error ? cause.message : 'Unable to reach the server', 'NETWORK_ERROR', 0, method, path)
+    reportApiError(error)
+    throw error
+  }
+
+  const responseText = await response.text()
+  let payload: Envelope<T> | undefined
+  try {
+    payload = responseText ? JSON.parse(responseText) as Envelope<T> : undefined
+  } catch {
+    // The structured error below records that the server returned invalid JSON.
+  }
+
+  if (!response.ok || !payload?.success) {
+    const failure = payload && !payload.success ? payload.error : undefined
+    const error = new ApiError(
+      failure?.message ?? `Request failed with status ${response.status}`,
+      failure?.code ?? 'INVALID_RESPONSE',
+      response.status,
+      method,
+      path,
+      failure?.details,
+    )
+    reportApiError(error)
+    throw error
+  }
   return payload.data
 }
 
